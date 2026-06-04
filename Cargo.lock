@@ -7,6 +7,8 @@ name = "LitematicaJSONParser"
 version = "0.1.0"
 dependencies = [
  "iced",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
