@@ -17,7 +17,7 @@ impl MaterialList {
         let l: MaterialList = serde_json::from_str(&str).expect("err");
         l
     }
-
+    /*
     pub fn generate_text(&self) -> String {
         let mut out: String = "".to_owned();
         for material in &self.Materials {
@@ -26,4 +26,5 @@ impl MaterialList {
         }
         out
     }
+    // */
 }

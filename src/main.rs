@@ -1,8 +1,8 @@
 use iced::{
     Alignment::Center,
-    Element,
+    Element, Function,
     Length::Fill,
-    widget::{checkbox, column, container, keyed_column, row, scrollable, text},
+    widget::{Column, Scrollable, checkbox, column, container, row, scrollable, text},
 };
 
 use crate::material_list::{MaterialList, material::Material};
@@ -31,6 +31,8 @@ fn main() -> iced::Result {
         .title("Litematica JSON Parser")
         .run()
 }
+
+/*
 fn print_materials(list: &MaterialList) {
     let name = &list.Name;
     println!("Printing Materials for {name}");
@@ -38,14 +40,17 @@ fn print_materials(list: &MaterialList) {
         println!("{0}: {1}", material.Item, material.format_item_count())
     }
 }
+    */
 
 struct App {
     list: MaterialList,
     items: Vec<Item>,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum Message {}
+#[derive(Debug, Clone)]
+enum Message {
+    ItemMessage(usize, ItemMessage),
+}
 
 impl App {
     fn new() -> Self {
@@ -69,25 +74,35 @@ impl App {
     }
 
     fn update(&mut self, message: Message) -> iced::Task<Message> {
+        match message {
+            Message::ItemMessage(i, item_message) => {
+                if let Some(item) = self.items.get_mut(i) {
+                    item.update(item_message);
+                }
+            }
+        };
+
         iced::Task::none()
     }
 
     fn view(&self) -> Element<'_, Message> {
-        /*
-        let witems = self.items;
-        let items: Element<_> = if witems.iter().count() > 0 {
-            keyed_column(items.iter().enumerate()).spacing(10).into()
-        // FIXME: find out how tf you display all the items
-        } else {
-            text!("hi").into()
-        };
+        let c = Column::new();
+        let it: Element<_> = self
+            .items
+            .iter()
+            .fold(Column::new().spacing(10), |col, i| {
+                col.push(i.view().map(
+                    Message::ItemMessage.with(self.items.iter().position(|r| r == i).unwrap()),
+                ))
+            })
+            .into();
+        let a: Element<_> = c.push(it).into();
 
-        */
-
-        let column = scrollable(
+        let column: Scrollable<'_, Message> = scrollable(
             column![
                 text!("Name: {}", self.list.Name),
-                text!("{}", self.list.generate_text()),
+                // text!("{}", self.list.generate_text()),
+                a,
             ]
             .spacing(10),
         );
@@ -96,11 +111,13 @@ impl App {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 struct Item {
     material: Material,
     completed: bool,
 }
 
+#[derive(Debug, Clone)]
 pub enum ItemMessage {
     Completed(bool),
 }
@@ -121,7 +138,7 @@ impl Item {
         }
     }
 
-    fn view(&self, i: usize) -> Element<'_, ItemMessage> {
+    fn view(&self) -> Element<'_, ItemMessage> {
         let checkbox = checkbox(self.completed)
             .label(&self.material.Item)
             .on_toggle(ItemMessage::Completed)
