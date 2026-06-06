@@ -1,14 +1,19 @@
 use iced::{
-    Alignment::Center,
-    Element, Function,
-    Length::Fill,
-    widget::{Column, Scrollable, checkbox, column, container, row, scrollable, text},
+    Element, Function, Length, Task,
+    widget::{Column, button, center_x, column, container, row, scrollable, text},
 };
 
-use crate::material_list::{MaterialList, material::Material};
+use crate::{
+    material_list::MaterialList,
+    widgets::{Item, ItemMessage},
+};
 use std::{fs, vec};
 
 pub mod material_list;
+pub mod widgets;
+
+/* ERROR MESSAGE CONSTANTS */
+const ERR_NO_MATERIAL_LIST: &str = "No material list loaded!";
 
 fn main() -> iced::Result {
     // let file_path = "./testdata/materials.json";
@@ -43,111 +48,180 @@ fn print_materials(list: &MaterialList) {
     */
 
 struct App {
-    list: MaterialList,
-    items: Vec<Item>,
+    page: Box<dyn Page>,
 }
 
 #[derive(Debug, Clone)]
 enum Message {
+    PagePreload(PagePreloadMessage),
+    PageListLoaded(PageListLoadedMessage),
     ItemMessage(usize, ItemMessage),
 }
 
+trait Page {
+    fn update(&mut self, message: Message) -> Option<Box<dyn Page>>;
+    fn view(&self) -> iced::Element<'_, Message>;
+}
+
 impl App {
-    fn new() -> Self {
-        let file_path = "./testdata/materials.json";
-        let contents =
-            fs::read_to_string(file_path).expect("Should have been able to read the file");
-
-        let material_list: MaterialList = MaterialList::from_str(&contents);
-        let mut material_list_items = vec![];
-
-        for material in material_list.Materials {
-            material_list_items.push(Item::new(material));
-        }
-
-        let material_list: MaterialList = MaterialList::from_str(&contents);
-
-        Self {
-            list: material_list,
-            items: material_list_items,
-        }
+    fn new() -> (Self, Task<Message>) {
+        (
+            Self {
+                page: Box::new(PagePreload::new()),
+            },
+            Task::none(),
+        )
     }
 
-    fn update(&mut self, message: Message) -> iced::Task<Message> {
-        match message {
-            Message::ItemMessage(i, item_message) => {
-                if let Some(item) = self.items.get_mut(i) {
-                    item.update(item_message);
-                }
-            }
-        };
-
-        iced::Task::none()
+    fn update(&mut self, message: Message) {
+        let page = self.page.update(message);
+        if let Some(p) = page {
+            self.page = p;
+        }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let c = Column::new();
-        let it: Element<_> = self
-            .items
-            .iter()
-            .fold(Column::new().spacing(10), |col, i| {
-                col.push(i.view().map(
-                    Message::ItemMessage.with(self.items.iter().position(|r| r == i).unwrap()),
-                ))
-            })
-            .into();
-        let a: Element<_> = c.push(it).into();
-
-        let column: Scrollable<'_, Message> = scrollable(
-            column![
-                text!("Name: {}", self.list.Name),
-                // text!("{}", self.list.generate_text()),
-                a,
-            ]
-            .spacing(10),
-        );
-
-        container(column).center(Fill).into()
+        self.page.view()
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-struct Item {
-    material: Material,
-    completed: bool,
+fn load_list(file_path: &str) -> (MaterialList, Vec<Item>) {
+    let contents = fs::read_to_string(file_path).expect("Should have been able to read the file");
+
+    let material_list: MaterialList = MaterialList::from_str(&contents);
+    let mut material_list_items = vec![];
+
+    for material in material_list.Materials {
+        material_list_items.push(Item::new(material));
+    }
+
+    let material_list: MaterialList = MaterialList::from_str(&contents);
+    (material_list, material_list_items)
 }
+
+// PagePreload
 
 #[derive(Debug, Clone)]
-pub enum ItemMessage {
-    Completed(bool),
+enum PagePreloadMessage {
+    ButtonPressed,
 }
 
-impl Item {
-    fn new(material: Material) -> Self {
-        Item {
-            material: material,
-            completed: false,
-        }
-    }
+struct PagePreload;
 
-    fn update(&mut self, message: ItemMessage) {
-        match message {
-            ItemMessage::Completed(completed) => {
-                self.completed = completed;
+impl PagePreload {
+    fn new() -> Self {
+        Self
+    }
+}
+
+impl Page for PagePreload {
+    fn update(&mut self, message: Message) -> Option<Box<dyn Page>> {
+        if let Message::PagePreload(msg) = message {
+            match msg {
+                PagePreloadMessage::ButtonPressed => return Some(Box::new(PageListLoaded::new())),
             }
         }
+        None
     }
 
-    fn view(&self) -> Element<'_, ItemMessage> {
-        let checkbox = checkbox(self.completed)
-            .label(&self.material.Item)
-            .on_toggle(ItemMessage::Completed)
-            .width(Fill)
-            .size(17)
-            .text_shaping(text::Shaping::Advanced);
+    fn view(&self) -> iced::Element<'_, Message> {
+        column![
+            text("Hello!"),
+            button("Load List").on_press(Message::PagePreload(PagePreloadMessage::ButtonPressed)),
+        ]
+        .into()
+    }
+}
 
-        let label = text(self.material.format_item_count());
+// PageListLoaded
 
-        row![checkbox, label].spacing(20).align_y(Center).into()
+#[derive(Debug, Clone)]
+enum PageListLoadedMessage {
+    ExitButtonPressed,
+}
+
+struct PageListLoaded {
+    list: Option<MaterialList>,
+    items: Option<Vec<Item>>,
+}
+
+impl PageListLoaded {
+    fn new() -> Self {
+        let file_path = "./testdata/materials.json";
+        let list = load_list(file_path);
+
+        Self {
+            //*
+            list: Some(list.0),
+            items: Some(list.1),
+            // */
+            /*
+            list: None,
+            items: None,
+            // */
+        }
+    }
+}
+
+impl Page for PageListLoaded {
+    fn update(&mut self, message: Message) -> Option<Box<dyn Page>> {
+        match message {
+            Message::ItemMessage(i, item_message) => {
+                if let Some(item) = self.items.as_mut().expect(ERR_NO_MATERIAL_LIST).get_mut(i) {
+                    item.update(item_message);
+                }
+            }
+            _ => {
+                if let Message::PageListLoaded(msg) = message {
+                    match msg {
+                        PageListLoadedMessage::ExitButtonPressed => {
+                            return Some(Box::new(PagePreload::new()));
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn view(&self) -> iced::Element<'_, Message> {
+        // check if material list exists
+        match &self.items {
+            None => text!("{}", ERR_NO_MATERIAL_LIST).into(),
+            Some(items) => {
+                let c = Column::new();
+                let it: Element<_> = items
+                    .iter()
+                    .fold(Column::new().spacing(10), |col, i| {
+                        col.push(i.view().map(
+                            Message::ItemMessage.with(items.iter().position(|r| r == i).unwrap()),
+                        ))
+                    })
+                    .into();
+                let a: Element<_> = c.push(it).into();
+
+                let column = column![a,].spacing(10).max_width(800);
+
+                let header = row![
+                    text!(
+                        "Material List for: {}",
+                        self.list.clone().expect(ERR_NO_MATERIAL_LIST).Name
+                    ),
+                    button("Exit").on_press(Message::PageListLoaded(
+                        PageListLoadedMessage::ExitButtonPressed
+                    ))
+                ]
+                .spacing(20)
+                .padding(10);
+
+                let content = column![
+                    container(header).center(Length::Fill).height(50.0),
+                    scrollable(center_x(column).padding(40))
+                ]
+                .spacing(20);
+
+                container(content).center(Length::Fill).into()
+            }
+        }
     }
 }
