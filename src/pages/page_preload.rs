@@ -3,7 +3,8 @@
 use std::{
     fs::{self, read_dir},
     io,
-    path::PathBuf,
+    path::{self, PathBuf},
+    process::Command,
 };
 
 use iced::{
@@ -20,7 +21,7 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub enum PagePreloadMessage {
-    ButtonPressed,
+    OpenListsFolder,
     LoadList(MaterialList),
 }
 
@@ -55,7 +56,12 @@ impl Page for PagePreload {
     fn update(&mut self, message: Message) -> Option<Box<dyn Page>> {
         if let Message::PagePreload(msg) = message {
             match msg {
-                PagePreloadMessage::ButtonPressed => return Some(Box::new(PageListLoaded::new())),
+                PagePreloadMessage::OpenListsFolder => {
+                    Command::new("xdg-open")
+                        .arg(path::absolute(LIST_FOLDER).expect("Could not get absolute path"))
+                        .spawn()
+                        .unwrap();
+                }
 
                 PagePreloadMessage::LoadList(list) => {
                     return Some(Box::new(PageListLoaded::from_list(list)));
@@ -91,6 +97,7 @@ impl Page for PagePreload {
             row![
                 text("Lists in listfolder").width(Length::Fill),
                 button("Open Folder")
+                    .on_press(Message::PagePreload(PagePreloadMessage::OpenListsFolder))
             ]
             .width(Length::Fill)
             .padding(10),
