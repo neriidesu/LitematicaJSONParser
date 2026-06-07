@@ -6,7 +6,7 @@ use iced::{
 };
 
 use crate::{
-    ERR_NO_MATERIAL_LIST, Message, load_list,
+    DEMO_PATH, ERR_NO_MATERIAL_LIST, Message, load_list,
     material_list::MaterialList,
     pages::{Page, page_preload::PagePreload},
     widgets::Item,
@@ -24,7 +24,7 @@ pub struct PageListLoaded {
 
 impl PageListLoaded {
     pub fn new() -> Self {
-        let file_path = "./testdata/materials.json";
+        let file_path = DEMO_PATH;
         let list = load_list(file_path);
 
         Self {
@@ -36,6 +36,19 @@ impl PageListLoaded {
             list: None,
             items: None,
             // */
+        }
+    }
+
+    pub fn from_list(material_list: MaterialList) -> Self {
+        let mut material_list_items = vec![];
+
+        for material in &material_list.Materials {
+            material_list_items.push(Item::new(material.clone()));
+        }
+
+        Self {
+            list: Some(material_list),
+            items: Some(material_list_items),
         }
     }
 }

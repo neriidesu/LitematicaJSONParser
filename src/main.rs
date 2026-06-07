@@ -14,8 +14,15 @@ use std::{fs, vec};
 pub mod material_list;
 pub mod widgets;
 
+/* ---------- CONFIG ---------- */
 /* ERROR MESSAGE CONSTANTS */
 const ERR_NO_MATERIAL_LIST: &str = "No material list loaded!";
+
+/* PATHS */
+const DEMO_PATH: &str = "./testdata/materials.json";
+const LIST_FOLDER: &str = "./testdata/lists/";
+
+/* ---------- CONFIG ---------- */
 
 fn main() -> iced::Result {
     // let file_path = "./testdata/materials.json";
@@ -88,8 +95,8 @@ fn load_list(file_path: &str) -> (MaterialList, Vec<Item>) {
     let material_list: MaterialList = MaterialList::from_str(&contents);
     let mut material_list_items = vec![];
 
-    for material in material_list.Materials {
-        material_list_items.push(Item::new(material));
+    for material in &material_list.Materials {
+        material_list_items.push(Item::new(material.clone()));
     }
 
     let material_list: MaterialList = MaterialList::from_str(&contents);

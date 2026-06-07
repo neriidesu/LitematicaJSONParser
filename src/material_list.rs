@@ -4,7 +4,7 @@ use crate::material_list::material::Material;
 
 pub mod material;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[allow(non_snake_case)]
 pub struct MaterialList {
     pub Name: String,
