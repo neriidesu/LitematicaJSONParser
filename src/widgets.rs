@@ -4,14 +4,15 @@ use iced::{
     Length::{self, Fill},
     widget::{button, checkbox, column, container, row, text},
 };
+use serde::{Deserialize, Serialize};
 
 use crate::{
-    Message,
+    Message, SaveData,
     material_list::{MaterialList, material::Material},
     pages::page_preload::PagePreloadMessage,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Item {
     material: Material,
     completed: bool,
@@ -54,16 +55,14 @@ impl Item {
 
 #[derive(Clone)]
 pub struct ListPreview {
-    pub material_list: MaterialList,
+    pub data: SaveData,
 }
 
 pub enum ListPreviewMessage {}
 
 impl ListPreview {
-    pub fn new(material_list: MaterialList) -> Self {
-        Self {
-            material_list: material_list,
-        }
+    pub fn new(data: SaveData) -> Self {
+        Self { data: data }
     }
 
     pub fn update(&mut self, message: ListPreviewMessage) {
@@ -71,10 +70,10 @@ impl ListPreview {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let label = text(&self.material_list.Name);
+        let label = text(&self.data.material_list.Name);
 
         let button = button("Load List").on_press(Message::PagePreload(
-            PagePreloadMessage::LoadList(self.material_list.clone()),
+            PagePreloadMessage::LoadSavedList(self.data.clone()),
         ));
 
         let content = row![label.width(Length::Fill), button]

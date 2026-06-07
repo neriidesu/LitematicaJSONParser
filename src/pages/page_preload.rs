@@ -13,20 +13,21 @@ use iced::{
 };
 
 use crate::{
-    LIST_FOLDER, Message,
+    LIST_FOLDER, Message, SaveData, load_data,
     material_list::MaterialList,
+    open_list,
     pages::{Page, page_list_loaded::PageListLoaded},
-    widgets::ListPreview,
+    widgets::{Item, ListPreview},
 };
 
 #[derive(Debug, Clone)]
 pub enum PagePreloadMessage {
     OpenListsFolder,
     LoadList(MaterialList),
+    LoadSavedList(SaveData),
 }
 
 pub struct PagePreload {
-    lists: Option<Vec<MaterialList>>,
     list_previews: Option<Vec<ListPreview>>,
 }
 
@@ -46,7 +47,6 @@ impl PagePreload {
         };
 
         Self {
-            lists: lists,
             list_previews: list_previews,
         }
     }
@@ -65,6 +65,10 @@ impl Page for PagePreload {
 
                 PagePreloadMessage::LoadList(list) => {
                     return Some(Box::new(PageListLoaded::from_list(list)));
+                }
+
+                PagePreloadMessage::LoadSavedList(data) => {
+                    return Some(Box::new(PageListLoaded::from_data(data)));
                 }
             }
         }
@@ -90,8 +94,11 @@ impl Page for PagePreload {
             }
         };
 
-        let left_column =
-            column![text("Hello!"), button("Load List"),].width(Length::FillPortion(1));
+        let left_column = column![
+            text("Hello!"),
+            button("Load List").on_press(Message::LoadNewList),
+        ]
+        .width(Length::FillPortion(1));
 
         let right_column = column![
             row![
@@ -111,19 +118,17 @@ impl Page for PagePreload {
     }
 }
 
-fn parse_lists_in_folder(folder_path: &str) -> Option<Vec<MaterialList>> {
+fn parse_lists_in_folder(folder_path: &str) -> Option<Vec<SaveData>> {
     let lists = get_lists_in_folder(folder_path)
         .ok()
         .expect("ERR while getting lists");
 
-    let mut l: Vec<MaterialList> = vec![];
+    let mut l: Vec<SaveData> = vec![];
 
     for list in lists {
-        let contents = fs::read_to_string(list).expect("Should have been able to read the file");
+        let data: SaveData = load_data(&list.to_str().expect("err"));
 
-        let material_list: MaterialList = MaterialList::from_str(&contents);
-
-        l.push(material_list);
+        l.push(data);
     }
 
     if l.is_empty() { None } else { Some(l) }

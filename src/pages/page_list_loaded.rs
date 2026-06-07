@@ -6,9 +6,10 @@ use iced::{
 };
 
 use crate::{
-    DEMO_PATH, ERR_NO_MATERIAL_LIST, Message, load_list,
+    DEMO_PATH, ERR_NO_MATERIAL_LIST, Message, SaveData,
     material_list::MaterialList,
     pages::{Page, page_preload::PagePreload},
+    save_data,
     widgets::Item,
 };
 
@@ -23,19 +24,10 @@ pub struct PageListLoaded {
 }
 
 impl PageListLoaded {
-    pub fn new() -> Self {
-        let file_path = DEMO_PATH;
-        let list = load_list(file_path);
-
+    pub fn from_data(data: SaveData) -> Self {
         Self {
-            //*
-            list: Some(list.0),
-            items: Some(list.1),
-            // */
-            /*
-            list: None,
-            items: None,
-            // */
+            list: Some(data.material_list),
+            items: Some(data.items),
         }
     }
 
@@ -65,6 +57,10 @@ impl Page for PageListLoaded {
                 if let Message::PageListLoaded(msg) = message {
                     match msg {
                         PageListLoadedMessage::ExitButtonPressed => {
+                            let _ = save_data(
+                                self.items.clone().expect(ERR_NO_MATERIAL_LIST),
+                                self.list.clone().expect(ERR_NO_MATERIAL_LIST),
+                            );
                             return Some(Box::new(PagePreload::new()));
                         }
                     }
