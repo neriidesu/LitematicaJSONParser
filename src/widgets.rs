@@ -1,45 +1,61 @@
+use std::path::{self, Path};
+
 use iced::{
     Alignment::Center,
     Element,
     Length::{self, Fill},
-    widget::{button, checkbox, column, container, row, text},
+    Task,
+    widget::{Image, button, checkbox, column, container, image, row, text},
 };
+use platform_dirs::AppDirs;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Message, SaveData,
+    APP_NAME, App, Message, SaveData, download_file,
     material_list::{MaterialList, material::Material},
-    pages::page_preload::PagePreloadMessage,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Item {
-    material: Material,
+    icon_path: Option<String>,
+    pub material: Material,
     completed: bool,
 }
 
 #[derive(Debug, Clone)]
 pub enum ItemMessage {
     Completed(bool),
+    FetchIcon(String),
+    IconLoaded(String),
 }
 
 impl Item {
     pub fn new(material: Material) -> Self {
         Self {
+            icon_path: None,
             material: material,
             completed: false,
         }
     }
 
-    pub fn update(&mut self, message: ItemMessage) {
+    pub fn update(&mut self, message: ItemMessage) -> Task<Message> {
         match message {
             ItemMessage::Completed(completed) => {
                 self.completed = completed;
             }
+
+            ItemMessage::FetchIcon(item) => {}
+
+            ItemMessage::IconLoaded(path) => self.icon_path = Some(path),
         }
+        Task::none()
     }
 
     pub fn view(&self) -> Element<'_, ItemMessage> {
+        let icon = image(get_image_path(self.material.Item.clone()))
+            .width(32)
+            .height(32);
+
         let checkbox = checkbox(self.completed)
             .label(&self.material.Item)
             .on_toggle(ItemMessage::Completed)
@@ -49,7 +65,34 @@ impl Item {
 
         let label = text(self.material.format_item_count());
 
-        row![checkbox, label].spacing(20).align_y(Center).into()
+        row![icon, checkbox, label]
+            .spacing(20)
+            .align_y(Center)
+            .into()
+    }
+}
+
+pub fn get_image_path(item_name: String) -> String {
+    let path = AppDirs::new(Some(APP_NAME), true)
+        .unwrap()
+        .data_dir
+        .join("icons")
+        .join(&item_name)
+        .with_extension("png");
+
+    if path.exists() {
+        path.to_str().expect("err").to_string()
+    } else {
+        let url = format!(
+            "https://www.mcworldtools.com/textures/rendered/{}.png",
+            &item_name[10..]
+        );
+        match download_file(&url, &path) {
+            Ok(_) => println!("imag saved at {}", path.to_str().expect("err")),
+            Err(e) => println!("error while downloading image: {}", e),
+        }
+
+        path.to_str().expect("err").to_string()
     }
 }
 
@@ -72,9 +115,7 @@ impl ListPreview {
     pub fn view(&self) -> Element<'_, Message> {
         let label = text(&self.data.material_list.Name);
 
-        let button = button("Load List").on_press(Message::PagePreload(
-            PagePreloadMessage::LoadSavedList(self.data.clone()),
-        ));
+        let button = button("Load List").on_press(Message::LoadSavedList(self.data.clone()));
 
         let content = row![label.width(Length::Fill), button]
             .spacing(10)
