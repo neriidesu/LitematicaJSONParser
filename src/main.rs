@@ -1,6 +1,6 @@
 use crate::{
     material_list::MaterialList,
-    widgets::{Item, ItemMessage, ListPreview, get_image_path},
+    widgets::{Item, ItemMessage, ListPreview},
 };
 use iced::{
     Element, Function, Length, Task,
@@ -26,10 +26,6 @@ const APP_NAME: &str = "LitematicaJSONParser";
 /* ERROR MESSAGE CONSTANTS */
 const ERR_NO_MATERIAL_LIST: &str = "No material list loaded!";
 
-/* PATHS */
-const DEMO_PATH: &str = "./testdata/materials.json";
-const LIST_FOLDER: &str = "./testdata/lists/";
-
 /* ---------- CONFIG ---------- */
 
 fn main() -> iced::Result {
@@ -50,7 +46,11 @@ struct PreloadData {
 
 impl PreloadData {
     pub fn new() -> Self {
-        let lists = parse_lists_in_folder(LIST_FOLDER);
+        let app_dirs = AppDirs::new(Some(APP_NAME), true).unwrap();
+        let binding = app_dirs.data_dir.join("lists");
+        let list_folder = binding.to_str().expect("err");
+
+        let lists = parse_lists_in_folder(list_folder);
 
         let mut list_previews = vec![];
         let list_previews: Option<Vec<ListPreview>> = match &lists {
@@ -119,7 +119,7 @@ pub enum Message {
 impl App {
     fn new() -> (Self, Task<Message>) {
         let app_dirs = AppDirs::new(Some(APP_NAME), true).unwrap();
-        fs::create_dir_all(&app_dirs.data_dir).unwrap();
+        fs::create_dir_all(&app_dirs.data_dir.join("lists")).unwrap();
 
         (
             Self {
@@ -162,8 +162,11 @@ impl App {
             Message::TupledItemMessage((i, m)) => return Task::done(Message::ItemMessage(i, m)),
 
             Message::OpenListsFolder => {
+                let app_dirs = AppDirs::new(Some(APP_NAME), true).unwrap();
+                let binding = app_dirs.data_dir.join("lists");
+                let list_folder = binding.to_str().expect("err");
                 Command::new("xdg-open")
-                    .arg(path::absolute(LIST_FOLDER).expect("Could not get absolute path"))
+                    .arg(path::absolute(list_folder).expect("Could not get absolute path"))
                     .spawn()
                     .unwrap();
             }
@@ -349,7 +352,10 @@ fn save_data(items: Vec<Item>, list: MaterialList) -> serde_json::Result<()> {
 }
 
 fn write_save_file(list: MaterialList, json_string: String) -> std::io::Result<()> {
-    let mut file = File::create(format!("{}{}.json", LIST_FOLDER, list.Name))?;
+    let app_dirs = AppDirs::new(Some(APP_NAME), true).unwrap();
+    let binding = app_dirs.data_dir.join("lists");
+    let list_folder = binding.to_str().expect("err");
+    let mut file = File::create(format!("{}/{}.json", list_folder, list.Name))?;
 
     file.write_all(json_string.as_bytes())?;
 

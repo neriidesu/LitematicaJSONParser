@@ -1,19 +1,14 @@
-use std::path::{self, Path};
-
 use iced::{
     Alignment::Center,
     Element,
     Length::{self, Fill},
     Task,
-    widget::{Image, button, checkbox, column, container, image, row, text},
+    widget::{button, checkbox, container, image, row, text},
 };
 use platform_dirs::AppDirs;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    APP_NAME, App, Message, SaveData, download_file,
-    material_list::{MaterialList, material::Material},
-};
+use crate::{APP_NAME, Message, SaveData, download_file, material_list::material::Material};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Item {
@@ -25,8 +20,6 @@ pub struct Item {
 #[derive(Debug, Clone)]
 pub enum ItemMessage {
     Completed(bool),
-    FetchIcon(String),
-    IconLoaded(String),
 }
 
 impl Item {
@@ -43,10 +36,6 @@ impl Item {
             ItemMessage::Completed(completed) => {
                 self.completed = completed;
             }
-
-            ItemMessage::FetchIcon(item) => {}
-
-            ItemMessage::IconLoaded(path) => self.icon_path = Some(path),
         }
         Task::none()
     }
