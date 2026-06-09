@@ -16,7 +16,7 @@ pub struct Item {
     #[serde(skip)]
     icon_handle: Option<Handle>,
     pub material: Material,
-    completed: bool,
+    pub completed: bool,
 }
 
 #[derive(Debug, Clone)]

@@ -1,24 +1,25 @@
 use crate::{
     material_list::MaterialList,
-    widgets::{Item, ItemMessage, ListPreview},
+    pages::{
+        list_loaded::{self, Filter, ListData},
+        preload::{self, PreloadData},
+    },
+    widgets::{Item, ItemMessage},
 };
-use iced::{
-    Element, Function, Length, Task,
-    futures::StreamExt,
-    widget::{Column, button, center_x, column, container, row, rule, scrollable, text},
-};
+use iced::{Element, Task, futures::StreamExt, widget::text};
 use platform_dirs::AppDirs;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Error,
     fs::{self, File},
-    io::{self, Write},
-    path::{self, Path, PathBuf},
+    io::Write,
+    path::{self, Path},
     process::Command,
     vec,
 };
 
 pub mod material_list;
+pub mod pages;
 pub mod widgets;
 
 /* ---------- CONFIG ---------- */
@@ -40,61 +41,6 @@ enum Page {
     Preload,
     ListLoaded,
 }
-struct PreloadData {
-    list_previews: Option<Vec<ListPreview>>,
-}
-
-impl PreloadData {
-    pub fn new() -> Self {
-        let app_dirs = AppDirs::new(Some(APP_NAME), true).unwrap();
-        let binding = app_dirs.data_dir.join("lists");
-        let list_folder = binding.to_str().expect("err");
-
-        let lists = parse_lists_in_folder(list_folder);
-
-        let mut list_previews = vec![];
-        let list_previews: Option<Vec<ListPreview>> = match &lists {
-            None => None,
-            Some(l) => {
-                for list in l {
-                    list_previews.push(ListPreview::new(list.clone()));
-                }
-                Some(list_previews)
-            }
-        };
-
-        Self {
-            list_previews: list_previews,
-        }
-    }
-}
-#[derive(Debug)]
-struct ListData {
-    pub list: Option<MaterialList>,
-    pub items: Option<Vec<Item>>,
-}
-
-impl ListData {
-    pub fn from_data(data: SaveData) -> Self {
-        Self {
-            list: Some(data.material_list),
-            items: Some(data.items),
-        }
-    }
-
-    pub fn from_list(material_list: MaterialList) -> Self {
-        let mut material_list_items = vec![];
-
-        for material in &material_list.Materials {
-            material_list_items.push(Item::new(material.clone()));
-        }
-
-        Self {
-            list: Some(material_list),
-            items: Some(material_list_items),
-        }
-    }
-}
 
 struct App {
     page: Page,
@@ -114,6 +60,7 @@ pub enum Message {
     OpenListsFolder,
     LoadList(MaterialList),
     LoadSavedList(SaveData),
+    FilterChanged(Filter),
 }
 
 impl App {
@@ -212,6 +159,12 @@ impl App {
 
                 return Task::batch(tasks);
             }
+
+            Message::FilterChanged(filter) => {
+                if let Some(ld) = &mut self.list_data {
+                    ld.filter = filter;
+                }
+            }
             _ => {}
         }
         Task::none()
@@ -219,88 +172,11 @@ impl App {
 
     fn view(&self) -> Element<'_, Message> {
         match self.page {
-            Page::Preload => {
-                let list_preview_column: Column<'_, Message> =
-                    match &self.preload_data.list_previews {
-                        None => {
-                            column![]
-                        }
-                        Some(lists) => {
-                            let c = Column::new();
-                            let it: Element<_> = lists
-                                .iter()
-                                .fold(Column::new().spacing(10), |col, l| col.push(l.view()))
-                                .into();
-                            let a: Element<_> = c.push(it).into();
-
-                            let column = column![a];
-
-                            column.spacing(10).max_width(800)
-                        }
-                    };
-
-                let left_column = column![
-                    text("Hello!"),
-                    button("Load List").on_press(Message::LoadNewList),
-                ]
-                .width(Length::FillPortion(1));
-
-                let right_column = column![
-                    row![
-                        text("Lists in listfolder").width(Length::Fill),
-                        button("Open Folder").on_press(Message::OpenListsFolder)
-                    ]
-                    .width(Length::Fill)
-                    .padding(10),
-                    rule::horizontal(2),
-                    scrollable(container(list_preview_column).center(Length::Fill))
-                ]
-                .width(Length::FillPortion(1));
-                let content = row![left_column, rule::vertical(2), right_column];
-
-                container(content).center(Length::Fill).padding(10).into()
-            }
+            Page::Preload => preload::view(&self.preload_data),
             Page::ListLoaded => {
                 // check if material list exists
                 if let Some(ld) = &self.list_data {
-                    match &ld.items {
-                        None => text!("{}", ERR_NO_MATERIAL_LIST).into(),
-                        Some(items) => {
-                            let c = Column::new();
-                            let it: Element<_> = items
-                                .iter()
-                                .fold(Column::new().spacing(10), |col, i| {
-                                    col.push(
-                                        i.view().map(
-                                            Message::ItemMessage
-                                                .with(items.iter().position(|r| r == i).unwrap()),
-                                        ),
-                                    )
-                                })
-                                .into();
-                            let a: Element<_> = c.push(it).into();
-
-                            let column = column![a,].spacing(10).max_width(800);
-
-                            let header = row![
-                                text!(
-                                    "Material List for: {}",
-                                    ld.list.clone().expect(ERR_NO_MATERIAL_LIST).Name
-                                ),
-                                button("Exit").on_press(Message::ExitListButtonPressed)
-                            ]
-                            .spacing(20)
-                            .padding(10);
-
-                            let content = column![
-                                container(header).center(Length::Fill).height(50.0),
-                                scrollable(center_x(column).padding(40))
-                            ]
-                            .spacing(20);
-
-                            container(content).center(Length::Fill).into()
-                        }
-                    }
+                    list_loaded::view(ld)
                 } else {
                     text!("{}", ERR_NO_MATERIAL_LIST).into()
                 }
@@ -335,14 +211,6 @@ async fn load_list(handle: rfd::FileHandle) -> Result<MaterialList, Error> {
 
     let material_list: MaterialList = MaterialList::from_str(&contents);
     Ok(material_list)
-}
-
-fn load_data(file_path: &str) -> SaveData {
-    let contents = fs::read_to_string(file_path).expect("Should have been able to read the file");
-
-    let data: SaveData = SaveData::from_str(&contents);
-
-    data
 }
 
 pub async fn download_file(url: &str, destination: &Path) -> anyhow::Result<()> {
@@ -393,28 +261,10 @@ fn write_save_file(list: MaterialList, json_string: String) -> std::io::Result<(
     Ok(())
 }
 
-fn parse_lists_in_folder(folder_path: &str) -> Option<Vec<SaveData>> {
-    let lists = get_lists_in_folder(folder_path)
-        .ok()
-        .expect("ERR while getting lists");
+fn load_data(file_path: &str) -> SaveData {
+    let contents = fs::read_to_string(file_path).expect("Should have been able to read the file");
 
-    let mut l: Vec<SaveData> = vec![];
+    let data: SaveData = SaveData::from_str(&contents);
 
-    for list in lists {
-        let data: SaveData = load_data(&list.to_str().expect("err"));
-
-        l.push(data);
-    }
-
-    if l.is_empty() { None } else { Some(l) }
-}
-
-fn get_lists_in_folder(folder_path: &str) -> io::Result<Vec<PathBuf>> {
-    let mut entries = fs::read_dir(folder_path)?
-        .map(|res| res.map(|e| e.path()))
-        .collect::<Result<Vec<_>, io::Error>>()?;
-
-    entries.sort();
-
-    Ok(entries)
+    data
 }
