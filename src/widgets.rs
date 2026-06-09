@@ -3,16 +3,18 @@ use iced::{
     Element,
     Length::{self, Fill},
     Task,
-    widget::{button, checkbox, container, image, row, text},
+    widget::{button, checkbox, container, image, image::Handle, row, text},
 };
 use platform_dirs::AppDirs;
 use serde::{Deserialize, Serialize};
+use tokio::{fs::File, io::AsyncReadExt};
 
 use crate::{APP_NAME, Message, SaveData, download_file, material_list::material::Material};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Item {
-    icon_path: Option<String>,
+    #[serde(skip)]
+    icon_handle: Option<Handle>,
     pub material: Material,
     completed: bool,
 }
@@ -20,30 +22,42 @@ pub struct Item {
 #[derive(Debug, Clone)]
 pub enum ItemMessage {
     Completed(bool),
+    Load,
+    Loaded(Vec<u8>),
 }
 
 impl Item {
     pub fn new(material: Material) -> Self {
         Self {
-            icon_path: None,
+            icon_handle: None,
             material: material,
             completed: false,
         }
     }
 
-    pub fn update(&mut self, message: ItemMessage) -> Task<Message> {
+    pub fn update(&mut self, message: ItemMessage, index: usize) -> Task<Message> {
         match message {
             ItemMessage::Completed(completed) => {
                 self.completed = completed;
             }
+            ItemMessage::Load => {
+                return Task::perform(
+                    get_indexed_image_message(self.material.Item.clone(), index),
+                    Message::TupledItemMessage,
+                );
+            }
+            ItemMessage::Loaded(data) => self.icon_handle = Some(Handle::from_bytes(data)),
         }
         Task::none()
     }
 
     pub fn view(&self) -> Element<'_, ItemMessage> {
-        let icon = image(get_image_path(self.material.Item.clone()))
-            .width(32)
-            .height(32);
+        let mut icon = image("./assets/loading.png").width(32).height(32);
+
+        match &self.icon_handle {
+            Some(h) => icon = image(h.clone()).width(32).height(32),
+            None => {}
+        }
 
         let checkbox = checkbox(self.completed)
             .label(&self.material.Item)
@@ -61,7 +75,12 @@ impl Item {
     }
 }
 
-pub fn get_image_path(item_name: String) -> String {
+async fn get_indexed_image_message(item_name: String, index: usize) -> (usize, ItemMessage) {
+    let buffer = get_image(item_name).await;
+    (index, ItemMessage::Loaded(buffer))
+}
+
+pub async fn get_image(item_name: String) -> Vec<u8> {
     let path = AppDirs::new(Some(APP_NAME), true)
         .unwrap()
         .data_dir
@@ -70,18 +89,23 @@ pub fn get_image_path(item_name: String) -> String {
         .with_extension("png");
 
     if path.exists() {
-        path.to_str().expect("err").to_string()
+        let mut file = File::open(path).await.unwrap();
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).await.unwrap();
+        buffer
     } else {
         let url = format!(
             "https://www.mcworldtools.com/textures/rendered/{}.png",
             &item_name[10..]
         );
-        match download_file(&url, &path) {
-            Ok(_) => println!("imag saved at {}", path.to_str().expect("err")),
+        match download_file(&url, &path).await {
+            Ok(_) => println!("file downloaded"),
             Err(e) => println!("error while downloading image: {}", e),
         }
-
-        path.to_str().expect("err").to_string()
+        let mut file = File::open(path).await.unwrap();
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).await.unwrap();
+        buffer
     }
 }
 

@@ -4,15 +4,15 @@ use crate::{
 };
 use iced::{
     Element, Function, Length, Task,
+    futures::StreamExt,
     widget::{Column, button, center_x, column, container, row, rule, scrollable, text},
 };
 use platform_dirs::AppDirs;
-use reqwest::blocking;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Error,
     fs::{self, File},
-    io::{self, Write, copy},
+    io::{self, Write},
     path::{self, Path, PathBuf},
     process::Command,
     vec,
@@ -149,7 +149,7 @@ impl App {
             Message::ItemMessage(i, item_message) => {
                 if let Some(ld) = &mut self.list_data {
                     if let Some(item) = ld.items.as_mut().expect(ERR_NO_MATERIAL_LIST).get_mut(i) {
-                        return item.update(item_message);
+                        return item.update(item_message, i);
                     }
                 }
             }
@@ -174,11 +174,33 @@ impl App {
             Message::LoadList(list) => {
                 self.list_data = Some(ListData::from_list(list));
                 self.page = Page::ListLoaded;
+
+                let mut tasks = vec![];
+                let items = self.list_data.as_ref().unwrap().items.as_ref().unwrap();
+                for item in items {
+                    tasks.push(Task::done(Message::ItemMessage(
+                        items.iter().position(|r| r == item).unwrap(),
+                        ItemMessage::Load,
+                    )))
+                }
+
+                return Task::batch(tasks);
             }
 
             Message::LoadSavedList(data) => {
                 self.list_data = Some(ListData::from_data(data));
                 self.page = Page::ListLoaded;
+
+                let mut tasks = vec![];
+                let items = self.list_data.as_ref().unwrap().items.as_ref().unwrap();
+                for item in items {
+                    tasks.push(Task::done(Message::ItemMessage(
+                        items.iter().position(|r| r == item).unwrap(),
+                        ItemMessage::Load,
+                    )))
+                }
+
+                return Task::batch(tasks);
             }
             _ => {}
         }
@@ -313,17 +335,16 @@ fn load_data(file_path: &str) -> SaveData {
     data
 }
 
-pub fn download_file(url: &str, destination: &Path) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn download_file(url: &str, destination: &Path) -> anyhow::Result<()> {
     let destination_dir = destination.parent().expect("err");
     fs::create_dir_all(destination_dir).unwrap();
 
-    let response = blocking::get(url).map_err(|e| format!("Failed to send request: {}", e))?;
-    let mut dest =
-        File::create(destination).map_err(|e| format!("Failed to create file: {}", e))?;
-    let content = response
-        .bytes()
-        .map_err(|e| format!("Failed to read response bytes: {}", e))?;
-    copy(&mut content.as_ref(), &mut dest).map_err(|e| format!("Failed to copy content: {}", e))?;
+    let mut file = tokio::fs::File::create(destination).await.expect("err");
+    let mut byte_stream = reqwest::get(url).await?.bytes_stream();
+
+    while let Some(item) = byte_stream.next().await {
+        tokio::io::copy(&mut item?.as_ref(), &mut file).await?;
+    }
     Ok(())
 }
 
