@@ -24,6 +24,7 @@ pub enum ItemMessage {
     Completed(bool),
     Load,
     Loaded(Vec<u8>),
+    Delete,
 }
 
 impl Item {
@@ -47,6 +48,7 @@ impl Item {
                 );
             }
             ItemMessage::Loaded(data) => self.icon_handle = Some(Handle::from_bytes(data)),
+            ItemMessage::Delete => {}
         }
         Task::none()
     }
@@ -68,7 +70,11 @@ impl Item {
 
         let label = text(self.material.format_item_count());
 
-        row![icon, checkbox, label]
+        let delete_button = button("Delete")
+            .on_press(ItemMessage::Delete)
+            .style(button::danger);
+
+        row![icon, checkbox, label, delete_button]
             .spacing(20)
             .align_y(Center)
             .into()

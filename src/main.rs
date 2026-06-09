@@ -146,6 +146,16 @@ impl App {
                 }
             }
 
+            Message::ItemMessage(i, ItemMessage::Delete) => {
+                self.list_data
+                    .as_mut()
+                    .unwrap()
+                    .items
+                    .as_mut()
+                    .unwrap()
+                    .remove(i);
+            }
+
             Message::ItemMessage(i, item_message) => {
                 if let Some(ld) = &mut self.list_data {
                     if let Some(item) = ld.items.as_mut().expect(ERR_NO_MATERIAL_LIST).get_mut(i) {
