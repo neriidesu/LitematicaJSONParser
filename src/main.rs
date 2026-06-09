@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     fmt::Error,
     fs::{self, File},
-    io::{Cursor, Write, copy},
+    io::Write,
     path::{self, Path},
     process::Command,
     vec,
