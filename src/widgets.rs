@@ -100,12 +100,20 @@ pub async fn get_image(item_name: String) -> Vec<u8> {
         file.read_to_end(&mut buffer).await.unwrap();
         buffer
     } else {
-        let url = format!(
-            "https://www.mcworldtools.com/textures/rendered/{}.png",
-            &item_name[10..]
-        );
+        let name: Vec<&str> = item_name.split_terminator(":").collect();
+        let split: Vec<&str> = name[1].split_inclusive("_").collect();
+        let mut name: Vec<String> = vec![];
+        for s in split {
+            let mut v: Vec<char> = s.chars().collect();
+            v[0] = v[0].to_uppercase().nth(0).unwrap();
+            let s_upper: String = v.into_iter().collect();
+            name.push(s_upper);
+        }
+        let name = name.join("");
+
+        let url = format!("https://minecraft.wiki/images/Invicon_{}.png", name);
         match download_file(&url, &path).await {
-            Ok(_) => println!("file downloaded"),
+            Ok(_) => println!("file downloaded to: {}", &path.to_string_lossy()),
             Err(e) => println!("error while downloading image: {}", e),
         }
         let mut file = File::open(path).await.unwrap();

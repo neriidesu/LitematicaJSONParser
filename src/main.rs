@@ -12,11 +12,12 @@ use serde::{Deserialize, Serialize};
 use std::{
     fmt::Error,
     fs::{self, File},
-    io::Write,
+    io::{Cursor, Write, copy},
     path::{self, Path},
     process::Command,
     vec,
 };
+use tokio::io::AsyncWriteExt;
 
 pub mod material_list;
 pub mod pages;
@@ -218,10 +219,19 @@ pub async fn download_file(url: &str, destination: &Path) -> anyhow::Result<()> 
     fs::create_dir_all(destination_dir).unwrap();
 
     let mut file = tokio::fs::File::create(destination).await.expect("err");
-    let mut byte_stream = reqwest::get(url).await?.bytes_stream();
+    let client = reqwest::Client::new();
+    let response = client
+        .get(url)
+        .header("User-Agent", "curl/8.20.0")
+        .send()
+        .await?
+        .error_for_status()?;
 
-    while let Some(item) = byte_stream.next().await {
-        tokio::io::copy(&mut item?.as_ref(), &mut file).await?;
+    let mut byte_stream = response.bytes_stream();
+
+    while let Some(chunk) = byte_stream.next().await {
+        let chunk = chunk?;
+        file.write_all(&chunk).await?;
     }
     Ok(())
 }
