@@ -1,6 +1,6 @@
 use iced::{
-    Element, Function, Length,
-    widget::{Column, button, center_x, column, container, row, scrollable, text},
+    Alignment, Element, Function, Length,
+    widget::{Column, button, center_x, column, container, progress_bar, row, scrollable, text},
 };
 use serde::{Deserialize, Serialize};
 
@@ -71,6 +71,7 @@ pub fn view(list_data: &ListData) -> Element<'_, Message> {
                 ),
                 button("Exit").on_press(Message::ExitListButtonPressed)
             ]
+            .align_y(Alignment::Center)
             .spacing(20)
             .padding(10);
 
@@ -81,7 +82,7 @@ pub fn view(list_data: &ListData) -> Element<'_, Message> {
                     list_data.filter
                 ))
                 .center(Length::Fill)
-                .height(50.0),
+                .height(100.0),
                 scrollable(center_x(column).padding(40)).height(Length::Fill)
             ]
             .spacing(20);
@@ -92,6 +93,8 @@ pub fn view(list_data: &ListData) -> Element<'_, Message> {
 }
 
 fn view_controls(items: &Vec<Item>, current_filter: Filter) -> Element<'_, Message> {
+    let items_left = items.iter().filter(|item| !item.completed).count();
+
     let filter_button = |label, filter, current_filter| {
         let button = button(label).style(if filter == current_filter {
             button::primary
@@ -101,12 +104,24 @@ fn view_controls(items: &Vec<Item>, current_filter: Filter) -> Element<'_, Messa
 
         button.on_press(Message::FilterChanged(filter))
     };
-
-    row![
-        filter_button("All", Filter::All, current_filter),
-        filter_button("Incomplete", Filter::Active, current_filter),
-        filter_button("Completed", Filter::Completed, current_filter),
+    column![
+        column![
+            text!(
+                "{items_left} {} left",
+                if items_left == 1 { "item" } else { "items" }
+            ),
+            progress_bar(0.0..=items.iter().count() as f32, items_left as f32)
+        ]
+        .height(25)
+        .align_x(Alignment::Center)
+        .max_width(800),
+        row![
+            filter_button("All", Filter::All, current_filter),
+            filter_button("Incomplete", Filter::Active, current_filter),
+            filter_button("Completed", Filter::Completed, current_filter),
+        ]
     ]
+    .align_x(Alignment::Center)
     .spacing(20)
     .padding(10)
     .into()
