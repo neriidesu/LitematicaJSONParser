@@ -170,6 +170,8 @@ impl App {
             }
 
             Message::OpenHides => {
+                list_loaded::read_user_hides().expect("err couldn't create user hides");
+
                 let app_dirs = AppDirs::new(Some(APP_NAME), true).unwrap();
                 let binding = app_dirs
                     .config_dir

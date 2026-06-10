@@ -109,7 +109,7 @@ fn remove_auto_hides(items: Vec<Item>) -> Vec<Item> {
     items
 }
 
-fn read_user_hides() -> anyhow::Result<Vec<String>> {
+pub fn read_user_hides() -> anyhow::Result<Vec<String>> {
     #[derive(Serialize, Deserialize)]
     struct Hides {
         user_hides: Vec<String>,
