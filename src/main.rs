@@ -1,4 +1,5 @@
 use crate::{
+    config::Config,
     material_list::MaterialList,
     pages::{
         list_loaded::{self, Filter, ListData},
@@ -6,7 +7,7 @@ use crate::{
     },
     widgets::{Item, ItemMessage},
 };
-use iced::{Element, Task, futures::StreamExt, widget::text};
+use iced::{Element, Task, Theme, futures::StreamExt, widget::text};
 use platform_dirs::AppDirs;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -14,25 +15,27 @@ use std::{
     fs::{self, File},
     io::Write,
     path::{self, Path},
-    process::Command,
     vec,
 };
 use tokio::io::AsyncWriteExt;
 
+pub mod config;
 pub mod material_list;
 pub mod pages;
 pub mod widgets;
 
 /* ---------- CONFIG ---------- */
-const APP_NAME: &str = "LitematicaJSONParser";
+const APP_NAME: &str = env!("CARGO_PKG_NAME");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
 /* ERROR MESSAGE CONSTANTS */
 const ERR_NO_MATERIAL_LIST: &str = "No material list loaded!";
-
 /* ---------- CONFIG ---------- */
 
 fn main() -> iced::Result {
     iced::application(App::new, App::update, App::view)
         .title("Litematica JSON Parser")
+        .theme(App::theme)
         .run()
 }
 
@@ -43,8 +46,11 @@ enum Page {
     ListLoaded,
 }
 
+#[derive(Default)]
 struct App {
+    theme: Option<Theme>,
     page: Page,
+    config: Config,
     list_data: Option<ListData>,
     preload_data: PreloadData,
 }
@@ -62,16 +68,33 @@ pub enum Message {
     LoadList(MaterialList),
     LoadSavedList(SaveData),
     FilterChanged(Filter),
+    ThemeChanged(Theme),
+    OpenHides,
 }
 
 impl App {
     fn new() -> (Self, Task<Message>) {
         let app_dirs = AppDirs::new(Some(APP_NAME), true).unwrap();
         fs::create_dir_all(&app_dirs.data_dir.join("lists")).unwrap();
+        fs::create_dir_all(&app_dirs.config_dir).unwrap();
+
+        let conf_file = &app_dirs.config_dir.join("config").with_extension("json");
+
+        let conf: Config = if conf_file.exists() {
+            Config::from_path(conf_file).expect("Couldn't read config file")
+        } else {
+            let c = Config::new();
+            Config::write_to_file(c.clone(), conf_file).expect("Couldn't write config file");
+            c
+        };
+
+        let theme = config::Theme::to_iced_theme(conf.theme.clone());
 
         (
             Self {
+                theme: theme,
                 page: Page::Preload,
+                config: conf,
                 list_data: None,
                 preload_data: PreloadData::new(),
             },
@@ -79,8 +102,27 @@ impl App {
         )
     }
 
+    fn save_config(&self) -> anyhow::Result<()> {
+        let app_dirs = AppDirs::new(Some(APP_NAME), true).unwrap();
+        let conf_file = &app_dirs.config_dir.join("config").with_extension("json");
+
+        Config::write_to_file(self.config.clone(), conf_file)?;
+
+        Ok(())
+    }
+
+    fn theme(&self) -> Option<Theme> {
+        self.theme.clone()
+    }
+
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::ThemeChanged(theme) => {
+                self.theme = Some(theme);
+                self.config.theme = config::Theme::from_iced_theme(self.theme.clone());
+                self.save_config().expect("Couldn't save Config");
+            }
+
             Message::ExitListButtonPressed => {
                 if let Some(ld) = &self.list_data {
                     let _ = save_data(
@@ -123,10 +165,19 @@ impl App {
                 let app_dirs = AppDirs::new(Some(APP_NAME), true).unwrap();
                 let binding = app_dirs.data_dir.join("lists");
                 let list_folder = binding.to_str().expect("err");
-                Command::new("xdg-open")
-                    .arg(path::absolute(list_folder).expect("Could not get absolute path"))
-                    .spawn()
-                    .unwrap();
+                open::that(path::absolute(list_folder).expect("Could not get absolute path"))
+                    .expect("could not open path");
+            }
+
+            Message::OpenHides => {
+                let app_dirs = AppDirs::new(Some(APP_NAME), true).unwrap();
+                let binding = app_dirs
+                    .config_dir
+                    .join("hide_items")
+                    .with_extension("json");
+                let file = binding.to_str().expect("err");
+                open::that(path::absolute(file).expect("Could not get absolute path"))
+                    .expect("could not open path");
             }
 
             Message::LoadList(list) => {
@@ -173,7 +224,7 @@ impl App {
 
     fn view(&self) -> Element<'_, Message> {
         match self.page {
-            Page::Preload => preload::view(&self.preload_data),
+            Page::Preload => preload::view(&self.preload_data, self.theme.clone()),
             Page::ListLoaded => {
                 // check if material list exists
                 if let Some(ld) = &self.list_data {

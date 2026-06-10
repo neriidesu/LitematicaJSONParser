@@ -142,7 +142,9 @@ impl ListPreview {
     pub fn view(&self) -> Element<'_, Message> {
         let label = text(&self.data.material_list.Name);
 
-        let button = button("Load List").on_press(Message::LoadSavedList(self.data.clone()));
+        let button = button("Load List")
+            .on_press(Message::LoadSavedList(self.data.clone()))
+            .style(button::primary);
 
         let content = row![label.width(Length::Fill), button]
             .spacing(10)
